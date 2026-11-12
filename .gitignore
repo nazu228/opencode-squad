@@ -1,0 +1,4 @@
+.squad/
+SQUAD_REPORT.md
+node_modules/
+*.bak
