@@ -105,6 +105,7 @@ export interface RunState {
   task: string
   project: string
   base: string
+  baseCommit?: string
   baseSource?: string
   branch: string
   status: RunStatus

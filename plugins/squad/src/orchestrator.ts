@@ -220,7 +220,7 @@ async function runBuilderPhase(input: OrchestratorInput & {
     const worktree = path.join(worktreeRoot(input.projectId, input.run.runId), safeName(task.id, "task"))
     let baseline = ""
     try {
-      await createWorktree(input.project, worktree, agentBranch, input.baseInfo.ref)
+      await createWorktree(input.project, worktree, agentBranch, input.baseInfo.commit)
       await syncUntracked(input.project, worktree)
       baseline = await baselineWorktree(worktree)
       await input.run.store.setTask(task.id, { worktree, branch: agentBranch })
@@ -338,7 +338,7 @@ async function createIntegration(input: OrchestratorInput & {
 }): Promise<{ dir: string; error?: string }> {
   const dir = path.join(worktreeRoot(input.projectId, input.run.runId), "integration")
   try {
-    await createWorktree(input.project, dir, input.run.store.state.branch, input.baseInfo.ref)
+    await createWorktree(input.project, dir, input.run.store.state.branch, input.baseInfo.commit)
   } catch (error) {
     return { dir, error: errorMessage(error) }
   }
@@ -354,8 +354,8 @@ async function createIntegration(input: OrchestratorInput & {
       return { dir, error: `cherry-pick ${id}: ${picked.error ?? "conflict"}` }
     }
   }
-  input.run.store.state.diffStat = await diffStat(dir, input.baseInfo.ref)
-  input.run.store.state.changedFiles = await changedFilesInDiff(dir, input.baseInfo.ref)
+  input.run.store.state.diffStat = await diffStat(dir, input.baseInfo.commit)
+  input.run.store.state.changedFiles = await changedFilesInDiff(dir, input.baseInfo.commit)
   await input.run.store.append("integration.updated", {
     commits: input.run.store.state.commits.length,
     changedFiles: input.run.store.state.changedFiles,
@@ -406,8 +406,9 @@ async function fixGateWithLid(input: OrchestratorInput & {
       const after = await currentHead(input.integrationDir)
       if (after !== before) {
         await input.run.store.addCommit("lid", after, `verification fix ${round}`)
-        input.run.store.state.diffStat = await diffStat(input.integrationDir, input.run.store.state.base)
-        input.run.store.state.changedFiles = await changedFilesInDiff(input.integrationDir, input.run.store.state.base)
+        const base = input.run.store.state.baseCommit ?? input.run.store.state.base
+        input.run.store.state.diffStat = await diffStat(input.integrationDir, base)
+        input.run.store.state.changedFiles = await changedFilesInDiff(input.integrationDir, base)
       }
     } catch (error) {
       await input.run.store.addWarning(`Lid fix round ${round}: ${errorMessage(error)}`)
@@ -433,8 +434,9 @@ async function finalize(input: OrchestratorInput & {
   await store.setStatus(status, input.error)
   if (store.state.integrationWorktree) {
     try {
-      store.state.diffStat = await diffStat(store.state.integrationWorktree, store.state.base)
-      store.state.changedFiles = await changedFilesInDiff(store.state.integrationWorktree, store.state.base)
+      const base = store.state.baseCommit ?? store.state.base
+      store.state.diffStat = await diffStat(store.state.integrationWorktree, base)
+      store.state.changedFiles = await changedFilesInDiff(store.state.integrationWorktree, base)
     } catch {
       // The diff may be unavailable after a failed worktree; the report still has commits.
     }
@@ -443,15 +445,6 @@ async function finalize(input: OrchestratorInput & {
       changedFiles: store.state.changedFiles ?? [],
     })
   }
-  const summary = renderSummary(store.state)
-  await store.writeText("summary.md", summary)
-  const report = renderReport(store.state, {
-    analystDigest: input.analystDigest,
-    criticDigest: input.criticDigest,
-  })
-  await writeFile(store.state.artifacts.report, report, "utf8")
-  await store.writeText("SQUAD_REPORT.md", report)
-  await progress(input, `Squad: ${status}. Ветка: ${store.state.branch}`)
   if (input.options.keepWorktrees) {
     await store.addWarning("Worktrees оставлены по флагу --keep-worktrees.")
   }
@@ -463,8 +456,19 @@ async function finalize(input: OrchestratorInput & {
   }
   if (store.state.integrationWorktree && !input.options.keepWorktrees && input.delivered) {
     await removeWorktree(input.project, store.state.integrationWorktree)
+    store.state.integrationWorktree = undefined
+    await store.persist()
   }
   await pruneWorktrees(input.project)
+  const summary = renderSummary(store.state)
+  await store.writeText("summary.md", summary)
+  const report = renderReport(store.state, {
+    analystDigest: input.analystDigest,
+    criticDigest: input.criticDigest,
+  })
+  await writeFile(store.state.artifacts.report, report, "utf8")
+  await store.writeText("SQUAD_REPORT.md", report)
+  await progress(input, `Squad: ${status}. Ветка: ${store.state.branch}`)
   cleanupRun(run.runId)
   unregisterRun(run.runId)
   return {
@@ -489,6 +493,7 @@ export async function orchestrate(input: OrchestratorInput): Promise<RunResult> 
     project,
     task: input.options.task,
     base: baseInfo.ref,
+    baseCommit: baseInfo.commit,
     baseSource: baseInfo.source,
     branch,
     runId,
@@ -542,8 +547,9 @@ export async function orchestrate(input: OrchestratorInput): Promise<RunResult> 
       try {
         baseInfo = await resolveBase(project, plan.base)
         store.state.base = baseInfo.ref
+        store.state.baseCommit = baseInfo.commit
         store.state.baseSource = baseInfo.source
-        await store.append("run.base", { base: baseInfo.ref, source: baseInfo.source })
+        await store.append("run.base", { base: baseInfo.ref, commit: baseInfo.commit, source: baseInfo.source })
       } catch (error) {
         await store.addWarning(`База из плана недоступна: ${errorMessage(error)}`)
       }

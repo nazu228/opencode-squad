@@ -74,6 +74,7 @@ export class RunStore {
     project: string
     task: string
     base: string
+    baseCommit?: string
     baseSource?: string
     branch: string
     runId?: string
@@ -91,6 +92,7 @@ export class RunStore {
       task: input.task,
       project: input.project,
       base: input.base,
+      baseCommit: input.baseCommit,
       baseSource: input.baseSource,
       branch: input.branch,
       status: "planning",

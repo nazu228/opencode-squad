@@ -72,6 +72,7 @@ export interface GitOutput {
 
 export interface BaseInfo {
   ref: string
+  commit: string
   source: string
 }
 
@@ -148,20 +149,24 @@ export function assertSafeProject(project: string): void {
 export async function resolveBase(project: string, requested?: string): Promise<BaseInfo> {
   if (requested?.trim()) {
     const result = await tryGit(project, ["rev-parse", "--verify", `${requested.trim()}^{commit}`])
-    if (!result?.stdout.trim()) throw new Error(`База "${requested}" не найдена в репозитории.`)
-    return { ref: requested.trim(), source: "explicit" }
+    const commit = result?.stdout.trim()
+    if (!commit) throw new Error(`База "${requested}" не найдена в репозитории.`)
+    return { ref: requested.trim(), commit, source: "explicit" }
   }
   const dev = await tryGit(project, ["rev-parse", "--verify", "origin/dev^{commit}"])
-  if (dev?.stdout.trim()) return { ref: "origin/dev", source: "origin/dev" }
+  const devCommit = dev?.stdout.trim()
+  if (devCommit) return { ref: "origin/dev", commit: devCommit, source: "origin/dev" }
   const remoteHead = await tryGit(project, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
   if (remoteHead?.stdout.trim()) {
     const ref = remoteHead.stdout.trim()
     const verified = await tryGit(project, ["rev-parse", "--verify", `${ref}^{commit}`])
-    if (verified?.stdout.trim()) return { ref, source: "origin HEAD" }
+    const commit = verified?.stdout.trim()
+    if (commit) return { ref, commit, source: "origin HEAD" }
   }
   const head = await tryGit(project, ["rev-parse", "--verify", "HEAD"])
-  if (!head?.stdout.trim()) throw new Error("В репозитории нет HEAD: сделай хотя бы один коммит.")
-  return { ref: "HEAD", source: "HEAD" }
+  const commit = head?.stdout.trim()
+  if (!commit) throw new Error("В репозитории нет HEAD: сделай хотя бы один коммит.")
+  return { ref: "HEAD", commit, source: "HEAD" }
 }
 
 export function safeName(value: string, fallback = "task"): string {
