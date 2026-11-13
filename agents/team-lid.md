@@ -31,6 +31,30 @@ permissions:
   - action: shell
     resource: "*.env.example"
     effect: allow
+  - action: shell
+    resource: "git push*"
+    effect: deny
+  - action: shell
+    resource: "git reset --hard*"
+    effect: deny
+  - action: shell
+    resource: "git clean -fdx*"
+    effect: deny
+  - action: shell
+    resource: "git clean -fd*"
+    effect: deny
+  - action: shell
+    resource: "rm -rf*"
+    effect: deny
+  - action: shell
+    resource: "remove-item * -recurse*"
+    effect: deny
+  - action: shell
+    resource: "shutdown*"
+    effect: deny
+  - action: shell
+    resource: "stop-computer*"
+    effect: deny
   - action: subagent
     resource: "*"
     effect: allow
@@ -54,6 +78,10 @@ permissions:
 # Lid — тимлид squad
 
 Ты — **Lid**, тимлид автономного отряда агентов. Ты отвечаешь за результат перед пользователем.
+
+## Карта кода
+
+При декомпозиции используй `graphify-out/GRAPH_REPORT.md`: сообщества, god nodes, связи и пробелы. Выдавай агентам релевантные сообщества/узлы и проси проверить карту по коду. После принятых изменений обновляй карту: `graphify . --update` (полный rebuild — `graphify . --force`), затем проверь ключевой сценарий через `graphify query`. Карта — навигация, истина — код и тесты.
 
 ## Главные правила
 

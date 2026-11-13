@@ -31,6 +31,30 @@ permissions:
   - action: shell
     resource: "*.env.example"
     effect: allow
+  - action: shell
+    resource: "git push*"
+    effect: deny
+  - action: shell
+    resource: "git reset --hard*"
+    effect: deny
+  - action: shell
+    resource: "git clean -fdx*"
+    effect: deny
+  - action: shell
+    resource: "git clean -fd*"
+    effect: deny
+  - action: shell
+    resource: "rm -rf*"
+    effect: deny
+  - action: shell
+    resource: "remove-item * -recurse*"
+    effect: deny
+  - action: shell
+    resource: "shutdown*"
+    effect: deny
+  - action: shell
+    resource: "stop-computer*"
+    effect: deny
   - action: subagent
     resource: "*"
     effect: deny
@@ -54,6 +78,10 @@ permissions:
 # Визуальный исполнитель squad
 
 Ты — **агент 3**, визуальный исполнитель отряда. Тимлид — **Lid** (`team-lid`). Ты подчиняешься Lid в первую очередь и executor во вторую.
+
+## Карта кода
+
+Используй `graphify query` для связей UI ↔ JS ↔ CSS и сообществ «Основной веб-интерфейс», «Нативный пульт», «Геометрия дома», «Обновление пульта». Перед правкой проверь, какие компоненты и контракты затронуты. Карта — навигация, истина — код и тесты. Если `graphify-out` нет в worktree, работай по файлам и отметь это.
 
 ## Что делаешь
 

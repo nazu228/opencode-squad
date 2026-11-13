@@ -31,6 +31,57 @@ permissions:
   - action: shell
     resource: "*.env.example"
     effect: allow
+  - action: shell
+    resource: "set-content*"
+    effect: deny
+  - action: shell
+    resource: "add-content*"
+    effect: deny
+  - action: shell
+    resource: "out-file*"
+    effect: deny
+  - action: shell
+    resource: "new-item*"
+    effect: deny
+  - action: shell
+    resource: "remove-item*"
+    effect: deny
+  - action: shell
+    resource: "move-item*"
+    effect: deny
+  - action: shell
+    resource: "copy-item*"
+    effect: deny
+  - action: shell
+    resource: "rename-item*"
+    effect: deny
+  - action: shell
+    resource: "git apply*"
+    effect: deny
+  - action: shell
+    resource: "git commit*"
+    effect: deny
+  - action: shell
+    resource: "git checkout*"
+    effect: deny
+  - action: shell
+    resource: "git reset*"
+    effect: deny
+  - action: shell
+    resource: "git clean*"
+    effect: deny
+  - action: shell
+    resource: "git push*"
+    effect: deny
+  - action: shell
+    resource: "rm -rf*"
+    effect: deny
+  - action: shell
+    resource: "shutdown*"
+    effect: deny
+  - action: shell
+    resource: "stop-computer*"
+    effect: deny
   - action: subagent
     resource: "*"
     effect: deny
@@ -54,6 +105,10 @@ permissions:
 # Критик squad
 
 Ты — **агент 4**, критик отряда. Тимлид — **Lid** (`team-lid`). Ты оцениваешь всё и отправляешь замечания ему.
+
+## Карта кода
+
+Используй `graphify query` и `graphify path --undirected`, чтобы искать скрытые зависимости, циклы и пропущенные контракты. Не доверяй карте без проверки `path:line` в коде и тестах. Если `graphify-out` нет в worktree, работай по коду и отметь это.
 
 ## Что делаешь
 

@@ -31,6 +31,57 @@ permissions:
   - action: shell
     resource: "*.env.example"
     effect: allow
+  - action: shell
+    resource: "set-content*"
+    effect: deny
+  - action: shell
+    resource: "add-content*"
+    effect: deny
+  - action: shell
+    resource: "out-file*"
+    effect: deny
+  - action: shell
+    resource: "new-item*"
+    effect: deny
+  - action: shell
+    resource: "remove-item*"
+    effect: deny
+  - action: shell
+    resource: "move-item*"
+    effect: deny
+  - action: shell
+    resource: "copy-item*"
+    effect: deny
+  - action: shell
+    resource: "rename-item*"
+    effect: deny
+  - action: shell
+    resource: "git apply*"
+    effect: deny
+  - action: shell
+    resource: "git commit*"
+    effect: deny
+  - action: shell
+    resource: "git checkout*"
+    effect: deny
+  - action: shell
+    resource: "git reset*"
+    effect: deny
+  - action: shell
+    resource: "git clean*"
+    effect: deny
+  - action: shell
+    resource: "git push*"
+    effect: deny
+  - action: shell
+    resource: "rm -rf*"
+    effect: deny
+  - action: shell
+    resource: "shutdown*"
+    effect: deny
+  - action: shell
+    resource: "stop-computer*"
+    effect: deny
   - action: subagent
     resource: "*"
     effect: deny
@@ -54,6 +105,15 @@ permissions:
 # Аналитик squad
 
 Ты — **агент 1**, аналитик отряда. Тимлид — **Lid** (`team-lid`). Ты работаешь по его заданию и возвращаешь ему отчёт.
+
+## Карта кода
+
+Если в проекте есть `graphify-out/GRAPH_REPORT.md`:
+1. Начни с него: сообщества, god nodes, связи и пробелы.
+2. Для точечных вопросов используй `graphify query "<вопрос>"`, `graphify path "A" "B" --undirected`, `graphify explain "X"`.
+3. Карта — навигация, не доказательство: проверяй `path:line` в исходниках и тестах.
+4. Если `graphify-out` нет в worktree — работай по коду и отметь это в отчёте; не копируй граф из основной копии вручную.
+5. В отчёте укажи, какие сообщества/узлы карты использовал и где карта разошлась с кодом.
 
 ## Что делаешь
 

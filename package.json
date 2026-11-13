@@ -1,0 +1,16 @@
+{
+  "name": "opencode-squad",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --import tsx --test test/args.test.ts test/plan.test.ts test/scheduler.test.ts test/event-store.test.ts test/git.test.ts test/gate.test.ts test/report.test.ts test/orchestrator.test.ts test/plugin.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@opencode/plugin": "^2.3.0",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,40 +1,29 @@
-# squad plugin
+# squad plugin v2
 
-V2-плагин для OpenCode: детерминированный мультиагентный оркестратор `/squad`.
+Server-плагин OpenCode V2. Регистрирует:
 
-## Что делает
+- команду `/squad` — запуск автономного отряда;
+- команду `/squad-status` — компактный статус run;
+- команду `/squad-answer` — ответ на вопрос агента;
+- инструмент `squad` — то же, что `/squad`, для вызова из агента;
+- инструмент `squad_status` — статус run;
+- инструмент `squad_board` — общая доска агентов.
 
-- Регистрирует команду `/squad` и инструмент `squad`.
-- Создаёт дочерние сессии через `ctx.session.create` с нужным агентом и location.
-- Запускает агентов пулом с ограничением concurrency.
-- Сохраняет результаты в `.squad/runs/<run-id>/`.
-- Для `N > 4` создаёт git worktrees для пишущих агентов, собирает патчи и применяет их в основной проект.
-- Пишет `summary.md` и черновик `SQUAD_REPORT.md`.
-- В режиме команды переключает сессию на `team-lid` и просит его обновить отчёт.
+Точка входа — `index.ts`. Модули в `src/`:
 
-## Фазы
+- `args.ts` — парсинг флагов и tool input;
+- `plan.ts` — JSON-план Lid, валидация, ownership/DAG;
+- `scheduler.ts` — DAG с concurrency;
+- `event-store.ts` — `state.json` + `events.jsonl`;
+- `git.ts` — worktrees, baseline, patch, cherry-pick, cleanup;
+- `gate.ts` — verification-команды;
+- `prompts.ts` — prompt-шаблоны;
+- `session.ts` — дочерние сессии и таймауты;
+- `questions.ts` — 60s -> Lid escalation;
+- `registry.ts` — активные run и session map;
+- `orchestrator.ts` — полный цикл;
+- `report.ts` — summary/report/status.
 
-```text
-analyst*  →  executor*  →  visual-executor*  →  critic*  →  Lid
-                |                 |
-                +--- core patches -+
-```
+Плагин не делает push/deploy/merge и не меняет основное рабочее дерево. Результат — integration-ветка, `SQUAD_REPORT.md` и артефакты в `.squad/runs/<run-id>/`.
 
-- `analyst` — read-only.
-- `executor` — core-код, тесты, исправления.
-- `visual-executor` — визуал; получает core-патчи.
-- `critic` — read-only, замечания `Lid`.
-
-## Интеграция патчей
-
-1. `capturePatch` делает `git add` с исключением секретов и `git diff --cached --binary`.
-2. В visual-worktree core-патчи применяются и коммитятся как `squad: core baseline`. Это важно: иначе visual-патч содержит core-изменения и при интеграции они применяются дважды.
-3. Перед применением в основной проект выполняется `git apply --check --3way`.
-4. Если проверка не прошла — патч не применяется, worktree сохраняется, `Lid` видит ошибку.
-
-## Ограничения
-
-- `ctx.session.wait` и `ctx.worktree` — экспериментальные API V2; при обновлении OpenCode проверить совместимость.
-- Агенты не могут задавать вопросы (`question` deny) — иначе дочерняя сессия зависнет без клиента.
-- `external_directory` deny: агенты работают только в своей location (проект или worktree).
-- `node_modules` и другие зависимости симлинкуются, а не устанавливаются заново.
+Полная документация: `../../README.md` и `../../docs/SQUAD.md`.

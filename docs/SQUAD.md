@@ -1,107 +1,128 @@
-# Squad — база агентов для OpenCode
+# Squad v2 — архитектура и эксплуатация
 
-Мультиагентный отряд: один `/squad` запускает несколько агентов над одной задачей, сохраняет результаты на диск, изолирует пишущих агентов в git worktrees и пишет `SQUAD_REPORT.md`.
+## Принципы
 
-## Быстрый старт
+1. **Основное дерево неприкосновенно.** Все пишущие агенты работают в отдельных git worktree. В проект попадают только cherry-pick успешных коммитов в integration-ветку.
+2. **Нет зелёного gate — нет успеха.** Run не может быть `delivered`, если verification не прошла.
+3. **Упавший агент не интегрируется.** Патч таймаутного/упавшего builder остаётся в worktree для разбора, но не попадает в ветку.
+4. **Lid планирует и отвечает.** Lid строит JSON-план, решает вопросы, чинит интеграционные ошибки. Он не пишет основную массу кода.
+5. **Один run — один branch + artifacts.** Run закрывается после выдачи; правки — новый run поверх предыдущей ветки.
+
+## Поток
 
 ```text
-/squad 4 Добавь авторизацию через JWT и тесты
-/squad --agents 8 Отрефактори модуль оплаты
-/squad 5 --roles analyst,executor,visual-executor,critic Сделай страницу товара
+/squad
+  -> assertSafeProject + git repo check
+  -> resolveBase: origin/dev -> origin HEAD -> HEAD
+  -> RunStore: .squad/runs/<run-id>/{state.json,events.jsonl}
+  -> Lid plan (team-lid session)
+  -> analysts (read-only, repo)
+  -> builders (DAG, per-task worktree+branch)
+  -> integration branch + cherry-pick successful commits
+  -> verification gate
+  -> Lid fix rounds (2 / 8 ideal)
+  -> critics (read-only, integration worktree)
+  -> SQUAD_REPORT.md + branch
+  -> cleanup worktrees, keep branch + artifacts
 ```
-
-Поддерживаются оба синтаксиса: `4 задача` и `--agents 4 задача`.
-
-## Флаги
-
-| Флаг | Что делает |
-| --- | --- |
-| `--agents N` / `N` | Число агентов, 2–100. По умолчанию 4 |
-| `--roles a,b,c` | Порядок ролей. По умолчанию `analyst,executor,visual-executor,critic` |
-| `--concurrency N` | Сколько агентов работают одновременно. По умолчанию 8 |
-| `--timeout N` | Таймаут на одного агента в минутах. По умолчанию 15 |
-| `--worktrees` | Принудительно включить worktrees |
-| `--no-worktrees` | Отключить worktrees |
-| `--keep-worktrees` | Не удалять worktrees после запуска |
 
 ## Роли
 
-| Агент | Роль | Права |
+| Роль | Где работает | Права |
 | --- | --- | --- |
-| `team-lid` | Тимлид: декомпозиция, раздача задач, финальный синтез | Полные, может запускать субагентов |
-| `analyst` | Агент 1: сбор данных по задаче и коду | Только чтение, shell, web |
-| `executor` | Агент 2: core-код, исправления, тесты | Чтение, запись, shell |
-| `visual-executor` | Агент 3: UI/UX, стили, компоненты, ассеты | Чтение, запись, shell |
-| `critic` | Агент 4: полная оценка, файлы не правит | Только чтение, shell, web |
+| `team-lid` | проект / integration worktree | план, вопросы, фиксы интеграции |
+| `analyst` | проект | read-only |
+| `executor` | свой worktree | код, тесты |
+| `visual-executor` | свой worktree | UI/UX, стили, доступность |
+| `critic` | integration worktree | read-only ревью |
 
-Приоритеты: `Lid` > `executor` для визуального агента. Критик передаёт замечания `Lid`.
+## План Lid
 
-## Как проходит запуск
-
-1. **Аналитика** — аналитики параллельно изучают проект и задачу. Только чтение.
-2. **Core** — исполнители параллельно пишут код. При `N > 4` каждый пишущий агент работает в своём worktree.
-3. **Визуал** — визуальные исполнители получают core-патчи, применяют их у себя и работают поверх. Приоритет задач — от `Lid`.
-4. **Интеграция** — патчи применяются в основной проект через `git apply --check` и `git apply --3way`. Если патч не прошёл — он остаётся в `.squad/runs/<run>/patches/`, а worktree не удаляется.
-5. **Критика** — критики параллельно проверяют результат и пишут замечания.
-6. **Синтез** — `Lid` обновляет `SQUAD_REPORT.md` и отвечает пользователю.
-
-## Worktrees
-
-- Включаются автоматически при `N > 4`.
-- Каждый пишущий агент получает отдельный git worktree в `~/.local/share/opencode/squad/worktrees/`.
-- В worktree копируются untracked-файлы (включая локальные конфиги) и симлинкуются `node_modules`, `.venv`, `venv`, `vendor`.
-- Успешные worktrees удаляются после применения патчей. Worktree с неудачным патчем сохраняется для разбора.
-- Если проект не git-репозиторий, создаётся `git init` и baseline-коммит. `.env`, `node_modules`, `dist`, `build` и подобное исключаются через `.git/info/exclude`.
-
-## Отчёты и артефакты
-
-```text
-<project>/
-├── SQUAD_REPORT.md              # итоговый отчёт
-└── .squad/
-    └── runs/<run-id>/
-        ├── summary.md           # полная сводка запуска
-        ├── results/<agent>.md   # отчёт каждого агента
-        ├── patches/<agent>.patch# патчи из worktrees
-        └── logs/<agent>.json    # сырой контекст сессии
+```json
+{
+  "summary": "кратко",
+  "base": "origin/dev или null",
+  "ideal": false,
+  "verification": ["npm test"],
+  "tasks": [
+    {
+      "id": "api",
+      "title": "Auth API",
+      "role": "executor",
+      "files": ["src/auth/**", "test/auth/**"],
+      "dependsOn": [],
+      "instructions": "что сделать",
+      "acceptance": ["что должно быть верно"]
+    }
+  ]
+}
 ```
 
-`.squad/` добавляется в `.git/info/exclude` и не попадает в git status.
+Валидация:
 
-## Безопасность
+- 1–12 задач;
+- роли только из разрешённых;
+- `dependsOn` без циклов и неизвестных id;
+- у builder-задач есть `files`;
+- владения builder-задач не пересекаются;
+- `verification` может быть пустым — тогда команды определяются по project rules/CI/package.json.
 
-- `.env` и секреты запрещены к чтению на уровне прав агентов.
-- Патчи не включают `.env`, `node_modules`, `.venv`, `vendor`.
-- Агенты не выходят за пределы проекта (`external_directory` = deny).
-- Авто-разрешения действуют только внутри проекта. Опасные команды вроде `git push` агенту не запрещены технически — их запрещает промпт; при необходимости добавьте `shell` deny-правила в файлы агентов.
-- `/squad` отказывается запускаться в системных папках (`C:\Windows`, `C:\Program Files`, `C:\ProgramData`, корень диска, домашняя папка без проекта). Запускайте из папки проекта.
+## DAG
 
-## Где лежит
+`runDag` запускает готовые задачи параллельно до `concurrency`. Задача с упавшей зависимостью получает `skipped`. Analyst-задачи выполняются до builders; critic — после gate.
 
-```text
-~/.config/opencode/
-├── agents/
-│   ├── team-lid.md
-│   ├── analyst.md
-│   ├── executor.md
-│   ├── visual-executor.md
-│   └── critic.md
-└── plugins/squad/index.ts
-```
+## Git-модель
 
-## Настройка
+- База: `--base`, иначе `origin/dev`, иначе `origin HEAD`, иначе `HEAD`.
+- Integration branch: `squad-<slug>-<short>`.
+- Agent branch: `squad-<short>-<task>`.
+- В worktree создаётся baseline-коммит с untracked-файлами; патч считается от baseline, поэтому untracked-файлы не попадают в патч.
+- Успешный builder коммитит `squad(<task>): <title>`; Lid cherry-pick'ает коммит в integration branch.
+- При конфликте cherry-pick отменяется, run помечается `failed`, integration worktree остаётся для разбора.
 
-- Изменить поведение роли — отредактируйте `agents/<role>.md`. Изменения подхватываются без перезапуска.
-- Добавить свою роль — создайте `agents/<my-role>.md` с `mode: all`, добавьте её в `--roles` и в логику фаз плагина (иначе она попадёт в фазу аналитики).
-- Сменить модель — глобальный `model` в `opencode.json`; агенты наследуют текущую модель. Можно задать `model` в конкретном агенте.
-- Ограничить число агентов — задайте `--agents` и `--concurrency`.
+## Verification
+
+Команды берутся в порядке:
+
+1. `--verify`;
+2. `plan.verification`;
+3. project rules;
+4. `package.json` scripts (`test`, `lint`, `typecheck`, `build`);
+5. известные стеки (`cargo test`, `go test ./...`, `pytest`, `mvn test`, `gradlew test`).
+
+Gate выполняется в integration worktree. При красном gate Lid получает вывод, чинит интеграцию, коммитит и gate перезапускается. Раундов: 2 по умолчанию, 8 при `--ideal`/«идеально»/решении Lid.
+
+## Доска и вопросы
+
+`squad_board` — инструмент агентов:
+
+- `read` — статус, план, доска, вопросы;
+- `post` — заметка;
+- `ask` — вопрос с `destructive` флагом;
+- `answer` — ответ;
+- `status` — статус run.
+
+Вопрос уходит в родительскую сессию. Если ответа нет 60 секунд, вопрос эскалируется Lid. Если Lid не ответил за 2 минуты: обратимый случай — assumption, destructive — stop.
+
+## Event store
+
+`state.json` — снимок для `/squad-status`; `events.jsonl` — append-only журнал. Запись state атомарная (temp + rename). `RunStore.read` валидирует run-id, чтобы не было path traversal.
+
+## Ограничения
+
+- TUI live panel не реализован; есть `/squad-status` и tool `squad_status`.
+- Per-role model routing не реализован: все агенты наследуют модель сессии.
+- Локальные guards — best-effort permission rules, не sandbox.
+- Вопросы не блокируют tool call: агент продолжает с assumption, ответ появляется на доске.
+- Плагин не делает push/deploy/merge.
 
 ## Диагностика
 
 ```bash
-opencode plugin list          # виден ли squad
-opencode debug agents         # видны ли team-lid, analyst, executor, visual-executor, critic
-opencode reload               # перезагрузить конфиг после правок
+opencode plugin list
+opencode debug agents
+opencode api get "/api/plugin?location[directory]=<project>"
+opencode api get "/api/command?location[directory]=<project>"
 ```
 
-Если `/squad` не появился — проверьте `opencode plugin list` и `opencode reload`. Если агент не видит проект — запускайте из корня проекта или проверьте `Location`.
+Артефакты: `.squad/runs/<run-id>/`. Логи OpenCode: `~/.local/share/opencode/log/opencode.log`.
